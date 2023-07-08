@@ -79,6 +79,8 @@
 #'  2. A factor that defines which spatial group (i.e. population) climate data
 #'  corresponds to. This length of this factor should correspond to the length of
 #'  the climate dataset.
+#'@param cv_by_year TRUE or FALSE. If TRUE cross validation performed by leaving 
+#'  one year out at a time.  If FALSE cross validation by randomly assigned k-folds. 
 #'@return Will return a list with an output for each tested set of climate
 #'  window parameters. Each list item contains three objects:
 #'  
@@ -199,11 +201,12 @@
 #'  
 #'@export
 
+
 slidingwin <- function(exclude = NA, xvar, cdate, bdate, baseline, 
                        type, refday, stat = "mean", func = "lin", range, 
                        cmissing = FALSE, cinterval = "day", k = 0,
                        upper = NA, lower = NA, binary = FALSE, centre = list(NULL, "both"),
-                       spatial = NULL, cohort = NULL){
+                       spatial = NULL, cohort = NULL, cv_by_year = F){
   
   ### Implementing scientific notation can cause problems because years
   ### are converted to characters in scientific notation (e.g. 2000 = "2e+3")
@@ -255,12 +258,12 @@ slidingwin <- function(exclude = NA, xvar, cdate, bdate, baseline,
   if(is.null(centre[[1]]) == FALSE){
     func = "centre"
   }
-    
+  
   #Make xvar a list where the name of list object is the climate variable (e.g. Rain, Temp)
   if (is.list(xvar) == FALSE){
     stop("xvar should be an object of type list")
   }
-
+  
   if (is.null(names(xvar)) == TRUE){
     numbers <- seq(1, length(xvar), 1)
     for (xname in 1:length(xvar)){
@@ -294,7 +297,7 @@ slidingwin <- function(exclude = NA, xvar, cdate, bdate, baseline,
   for (combo in 1:nrow(allcombos)){
     runs <- basewin(exclude = exclude, xvar = xvar[[paste(allcombos[combo, 1])]], cdate = cdate, bdate = bdate, baseline = baseline,
                     range = range, type = paste(allcombos[combo, 2]), refday = refday, stat = paste(allcombos[combo, 3]), func = paste(allcombos[combo, 4]),
-                    cmissing = cmissing, cinterval = cinterval, k = k, 
+                    cmissing = cmissing, cinterval = cinterval, k = k, cv_by_year = cv_by_year,
                     upper = ifelse(binarylevel == "two" || binarylevel == "upper", allcombos$upper[combo], NA),
                     lower = ifelse(binarylevel == "two" || binarylevel == "lower", allcombos$lower[combo], NA),
                     binary = paste(allcombos$binary[combo]), centre = centre, cohort = cohort,

@@ -26,7 +26,7 @@
 #Basewin function that is combined with manywin to test multiple climate window characteristics
 basewin <- function(exclude, xvar, cdate, bdate, baseline, range, 
                     type, stat = "mean", func = "lin", refday,
-                    cmissing = FALSE, cinterval = "day", nrandom = 0, k = 0,
+                    cmissing = FALSE, cinterval = "day", nrandom = 0, k = 0, cv_by_year = FALSE,
                     spatial, upper = NA, lower = NA, binary = FALSE, scale = FALSE, centre = list(NULL, "both"),
                     cohort = NULL, randwin = FALSE, randwin_thresholdQ){
   
@@ -718,6 +718,14 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
   if (k >= 1){
     modeldat$K <- sample(seq(from = 1, to = length(modeldat$climate), by = 1) %% k + 1)
   }   # create labels k-fold crossvalidation
+  if ( cv_by_year ){ 
+    K <- as.numeric( factor(cohort) )
+    modeldat$K <- K
+    k <- max(K)
+    print( cohort)
+    print(K) 
+    modeldat$K <- K
+  }
   
   #Create the progress bar
   pb <- txtProgressBar(min = 0, max = maxmodno, style = 3, char = "|")
@@ -868,13 +876,17 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
               #rmse_corrected<-sqrt(sum((test$predictions-test[,1])^2)/modeloutputcv$df[1])
               ifelse (k == 1, AICc_cvtotal <- AICc_cv, AICc_cvtotal <- AICc_cvtotal + AICc_cv)              
               ifelse (k == 1, AICc_cv_basetotal <- AICc_cv_baseline, AICc_cv_basetotal <- AICc_cv_basetotal + AICc_cv_baseline)
+              ifelse (k == 1, mse_cvtotal <- mse, mse_cvtotal <- mse_cvtotal + mse )
+              ifelse (k == 1, mse_baselinetotal <- mse_baseline, mse_baselinetotal <- mse_baselinetotal + mse_baseline)
               #Add up the AICc values for all iterations of crossvalidation
             }
             
             AICc_cv_avg          <- AICc_cvtotal / k # Determine the average AICc value of the climate model from cross validations
             AICc_cv_baseline_avg <- AICc_cv_basetotal / k # Determine the average AICc value of the null model from cross validations
             deltaAICc_cv         <- AICc_cv_avg - AICc_cv_baseline_avg # Calculate delta AICc
-            
+            mse_cv_avg           <- mse_cvtotal / k # average mse of climate model across cross validations
+            mse_baseline_avg     <- mse_baselinetotal / k # average mse for null models     
+            deltaMSE_cv          <- mse_cv_avg - mse_baseline_avg # calculate delta mse 
           }
           
           }
@@ -884,6 +896,8 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
             
             modlist$ModelAICc[modno]    <- AICc_cv_avg
             modlist$deltaAICc[modno]    <- deltaAICc_cv
+            modlist$ModelMSE[modno]     <- mse_cv_avg
+            modlist$deltaMSE[modno]     <- deltaMSE_cv
             
           } else {
             
