@@ -26,7 +26,7 @@
 #Basewin function that is combined with manywin to test multiple climate window characteristics
 basewin <- function(exclude, xvar, cdate, bdate, baseline, range, 
                     type, stat = "mean", func = "lin", refday,
-                    cmissing = FALSE, cinterval = "day", nrandom = 0, k = 0, cv_by_year = FALSE,
+                    cmissing = FALSE, cinterval = "day", nrandom = 0, k = 0, cv_by_cohort = FALSE, ncores = 1,
                     spatial, upper = NA, lower = NA, binary = FALSE, scale = FALSE, centre = list(NULL, "both"),
                     cohort = NULL, randwin = FALSE, randwin_thresholdQ){
   
@@ -708,8 +708,9 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
   } else {
     
     #If climate has already been provided, simply update the model with the new term yvar.
+    #If there are interactions, also remove climate term from baseline model
     modeloutput <- update(baseline, yvar ~., data = modeldat)
-    
+    baseline <- update(baseline, remove_terms(formula(baseline), 'climate'))
     coef_data <- list()
     
   }
@@ -718,12 +719,9 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
   if (k >= 1){
     modeldat$K <- sample(seq(from = 1, to = length(modeldat$climate), by = 1) %% k + 1)
   }   # create labels k-fold crossvalidation
-  if ( cv_by_year ){ 
+  if ( cv_by_cohort ){ 
     K <- as.numeric( factor(cohort) )
-    modeldat$K <- K
     k <- max(K)
-    print( cohort)
-    print(K) 
     modeldat$K <- K
   }
   
@@ -851,65 +849,85 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
           }
           
           # If valid, perform k-fold crossvalidation
-          if (k >= 1) {      
-            for (k in 1:k) {
-              test                     <- subset(modeldat, modeldat$K == k) # Create the test dataset
-              train                    <- subset(modeldat, modeldat$K != k) # Create the train dataset
-              baselinecv               <- update(baseline, yvar~., data = train) # Refit the model without climate using the train dataset
-              modeloutputcv            <- update(modeloutput, yvar~., data = train)  # Refit the model with climate using the train dataset
-              test$predictions         <- predict(modeloutputcv, newdata = test, allow.new.levels = TRUE, type = "response") # Test the output of the climate model fitted using the test data
-              test$predictionsbaseline <- predict(baselinecv, newdata = test, allow.new.levels = TRUE, type = "response") # Test the output of the null models fitted using the test data
+          if (k >= 1) {
+            
+            if( ncores > 1 & .Platform$OS.type == 'unix'){
+              # if Mac or Linux use parallel 
+              options(mc.cores = parallel::detectCores())
+              ncores <- min(ncores, getOption("mc.cores", 2L))
+              cv_out <- parallel::mclapply( 1:k, function( i ) { cross_validate(fold = i, modeldat = modeldat, baseline = baseline, modeloutput = modeloutput) } , mc.cores = ncores )
+            }else if( ncores > 1 & .Platform$OS.type != 'windows'){ 
+              #options(mc.cores = parallel::detectCores())
+              #ncores <- min(ncores, getOption("mc.cores", 2L))
+              #cv_out <- parallel::mclapply( 1:k, function( i ) { cross_validate(fold = i, modeldat = modeldat, baseline = baseline, modeloutput = modeloutput) } , mc.cores = ncores )
+              print( "Windows Parallel" )
               
-              num        <- length(test$predictions) # Determine the length of the test dataset
-              p          <- num - df.residual(modeloutputcv)  # Determine df for the climate model
-              mse        <- sum((test$predictions - test[, 1]) ^ 2) / num
-              p_baseline <- num - df.residual(baselinecv)  # Determine df for the baseline model
-
-              #calculate mean standard errors for climate model
-              #calc mse only works non-categorical yvars, e.g. normal, binary, count data 
-              mse_baseline <- sum((test$predictionsbaseline - test[, 1]) ^ 2) / num
-              #calculate mean standard errors for null model
-              AICc_cv          <- num * log(mse) + (2 * p * (p + 1)) / (num - p - 1)
-              AICc_cv_baseline <- num * log(mse_baseline) + (2 * p_baseline * (p_baseline + 1)) / (num - p_baseline - 1)
-
-              #Calculate AICc values for climate and baseline models
-              #rmse_corrected<-sqrt(sum((test$predictions-test[,1])^2)/modeloutputcv$df[1])
-              ifelse (k == 1, AICc_cvtotal <- AICc_cv, AICc_cvtotal <- AICc_cvtotal + AICc_cv)              
-              ifelse (k == 1, AICc_cv_basetotal <- AICc_cv_baseline, AICc_cv_basetotal <- AICc_cv_basetotal + AICc_cv_baseline)
-              ifelse (k == 1, mse_cvtotal <- mse, mse_cvtotal <- mse_cvtotal + mse )
-              ifelse (k == 1, mse_baselinetotal <- mse_baseline, mse_baselinetotal <- mse_baselinetotal + mse_baseline)
-              #Add up the AICc values for all iterations of crossvalidation
+            }else{ 
+              # if Windows 
+              cv_out <- lapply( 1:k, function( i ) { cross_validate(fold = i, modeldat = modeldat, baseline = baseline, modeloutput = modeloutput) } )
             }
             
-            AICc_cv_avg          <- AICc_cvtotal / k # Determine the average AICc value of the climate model from cross validations
-            AICc_cv_baseline_avg <- AICc_cv_basetotal / k # Determine the average AICc value of the null model from cross validations
-            deltaAICc_cv         <- AICc_cv_avg - AICc_cv_baseline_avg # Calculate delta AICc
-            mse_cv_avg           <- mse_cvtotal / k # average mse of climate model across cross validations
-            mse_baseline_avg     <- mse_baselinetotal / k # average mse for null models     
-            deltaMSE_cv          <- mse_cv_avg - mse_baseline_avg # calculate delta mse 
+            cv_fit_avgs <- apply( do.call(rbind, cv_out), 2, mean)
+            
+          #  for (i in 1:k) {
+              
+            #   test                     <- subset(modeldat, modeldat$K == i) # Create the test dataset
+            #   train                    <- subset(modeldat, modeldat$K != i) # Create the train dataset
+            #   baselinecv               <- update(baseline, yvar~., data = train) # Refit the model without climate using the train dataset
+            #   modeloutputcv            <- update(modeloutput, yvar~., data = train)  # Refit the model with climate using the train dataset
+            #   test$predictions         <- predict(modeloutputcv, newdata = test, allow.new.levels = TRUE, type = "response") # Test the output of the climate model fitted using the test data
+            #   test$predictionsbaseline <- predict(baselinecv, newdata = test, allow.new.levels = TRUE, type = "response") # Test the output of the null models fitted using the test data
+            #   
+            #   num        <- length(test$predictions) # Determine the length of the test dataset
+            #   p          <- num - df.residual(modeloutputcv)  # Determine df for the climate model
+            #   mse        <- sum((test$predictions - test[, 1]) ^ 2) / num
+            #   p_baseline <- num - df.residual(baselinecv)  # Determine df for the baseline model
+            # 
+            #   #calculate mean standard errors for climate model
+            #   #calc mse only works non-categorical yvars, e.g. normal, binary, count data 
+            #   mse_baseline <- sum((test$predictionsbaseline - test[, 1]) ^ 2) / num
+            #   #calculate mean standard errors for null model
+            #   AICc_cv          <- num * log(mse) + (2 * p * (p + 1)) / (num - p - 1)
+            #   AICc_cv_baseline <- num * log(mse_baseline) + (2 * p_baseline * (p_baseline + 1)) / (num - p_baseline - 1)
+            # 
+            #   #Calculate AICc values for climate and baseline models
+            #   #rmse_corrected<-sqrt(sum((test$predictions-test[,1])^2)/modeloutputcv$df[1])
+            #   ifelse (i == 1, AICc_cvtotal <- AICc_cv, AICc_cvtotal <- AICc_cvtotal + AICc_cv)              
+            #   ifelse (i == 1, AICc_cv_basetotal <- AICc_cv_baseline, AICc_cv_basetotal <- AICc_cv_basetotal + AICc_cv_baseline)
+            #   ifelse (i == 1, mse_cvtotal <- mse, mse_cvtotal <- mse_cvtotal + mse )
+            #   ifelse (i == 1, mse_baselinetotal <- mse_baseline, mse_baselinetotal <- mse_baselinetotal + mse_baseline)
+            #   #Add up the AICc values for all iterations of crossvalidation
+            # }
+# 
+#             AICc_cv_avg          <- AICc_cvtotal / k # Determine the average AICc value of the climate model from cross validations
+#             AICc_cv_baseline_avg <- AICc_cv_basetotal / k # Determine the average AICc value of the null model from cross validations
+#             deltaAICc_cv         <- AICc_cv_avg - AICc_cv_baseline_avg # Calculate delta AICc
+#             mse_cv_avg           <- mse_cvtotal / k # average mse of climate model across cross validations
+#             mse_baseline_avg     <- mse_baselinetotal / k # average mse for null models
+#             deltaMSE_cv          <- mse_cv_avg - mse_baseline_avg # calculate delta mse
           }
           
           }
             
           #Add model parameters to list
-          if (k > 1){
+          if (k >= 1 & family(baseline)[1] == 'binomial'){
+
+            modlist$ModelLogLoss[modno]     <- cv_fit_avgs['logloss'] 
+            modlist$deltaLogLoss[modno]     <- cv_fit_avgs['logloss'] - cv_fit_avgs['logloss_baseline']
             
-            modlist$ModelAICc[modno]    <- AICc_cv_avg
-            modlist$deltaAICc[modno]    <- deltaAICc_cv
-            modlist$ModelMSE[modno]     <- mse_cv_avg
-            modlist$deltaMSE[modno]     <- deltaMSE_cv
+          }else if( k >= 1 & family(baseline)[1] != 'binomial'){ 
+            modlist$ModelMSE[modno]     <- cv_fit_avgs['mse'] 
+            modlist$deltaMSE[modno]     <- cv_fit_avgs['mse'] - cv_fit_avgs['mse_baseline']
+          } 
+          
+          modlist$deltaAICc[modno] <- MuMIn::AICc(modeloutput) - MuMIn::AICc(baseline)
+          modlist$ModelAICc[modno] <- MuMIn::AICc(modeloutput)
             
-          } else {
-            
-            modlist$deltaAICc[modno] <- AICc(modeloutput) - AICc(baseline)
-            modlist$ModelAICc[modno] <- AICc(modeloutput)
-          }
-       
           modlist$WindowOpen[modno]  <- m
           modlist$WindowClose[modno] <- m - n + 1
           
           #Extract model coefficients (syntax is slightly different depending on the model type e.g. lme4 v. nlme v. lm)
-          if(any(grepl("climate", colnames(model.frame(baseline))))){
+          if(any(grepl("climate", colnames(model.frame(modeloutput))))){
   
               coefs <- coef(summary(modeloutput))[, 1:2]
               
@@ -1102,10 +1120,25 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
   }
   
   #Save the best model output
-  m <- (modlist$WindowOpen[modlist$ModelAICc %in% min(modlist$ModelAICc)])
-  n <- (modlist$WindowOpen[modlist$ModelAICc %in% min(modlist$ModelAICc)]) - (modlist$WindowClose[modlist$ModelAICc %in% min(modlist$ModelAICc)]) + 1
+  #m <- (modlist$WindowOpen[modlist$ModelAICc %in% min(modlist$ModelAICc)])
+  if( k >= 1 & !is.null(modlist$ModelMSE)){ 
+    # Rank by MSE 
+    topModel <- which.min(modlist$ModelMSE)
+    
+  }else if( k >= 1 & !is.null(modlist$ModelLogLoss)){ 
+    # Rank by log loss 
+    topModel <- which.min(modlist$ModelLogLoss)
+  }else{ 
+    # Rank by AICc 
+    topModel <- which.min(modlist$ModelAICc)
+  }
+  
+  m <- modlist$WindowOpen[topModel]
+  n <- modlist$WindowOpen[topModel] - modlist$WindowClose[topModel] + 1
+  
   windowopen  <- m[1] - range[2] + 1
   windowclose <- windowopen - n[1] + 1
+  
   if (stat == "slope"){
     time      <- n[1]:1
     modeldat$climate <- apply(cmatrix[, windowclose:windowopen], 1, FUN = function(x) coef(lm(x ~ time))[2])
@@ -1215,15 +1248,22 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
     
     modlist$Randomised    <- "no"
     modlist               <- as.data.frame(modlist)
-    LocalOutput           <- modlist[order(modlist$ModelAICc), ]
-    LocalOutput$ModelAICc <-NULL
+    
+    if( !is.null(modlist$ModelMSE) ){
+      LocalOutput   <- modlist[order(modlist$ModelMSE), ]
+    }else if( !is.null(modlist$ModelLogLoss)){
+      LocalOutput   <- modlist[order(modlist$ModelLogLoss), ]
+    }else{ 
+      LocalOutput   <- modlist[order(modlist$ModelAICc), ]
+    }
+    #LocalOutput$ModelAICc <-NULL
   }
   
   if (nrandom > 0){
     modlist$Randomised        <- "yes"
     modlist                   <- as.data.frame(modlist)
     LocalOutputRand           <- modlist[order(modlist$ModelAICc), ]
-    LocalOutputRand$ModelAICc <- NULL
+    #LocalOutputRand$ModelAICc <- NULL
   }
   
   if (nrandom == 0){
@@ -2562,7 +2602,7 @@ modloglik_Uni <- function(par = par, modeloutput = modeloutput,
   # plot the weight function and corresponding weather index being evaluated
   par(mfrow = c(3, 2))
   plot((weight / sum(weight)), type = "l", ylab = "weight", xlab = "timestep (e.g. days)", main = "Output of current weighted window being tested")
-  plot(as.numeric(funcenv$DAICc), type = "l", ylab = expression(paste(Delta, "AICc")), xlab = "convergence step")
+  plot(as.numeric(funcenv$DAICc), type = "l", ylab = expression(paste(delta, "AICc")), xlab = "convergence step")
   plot(as.numeric(funcenv$par_open), type = "l", ylab = "open parameter", xlab = "convergence step")
   plot(as.numeric(funcenv$track_mean), type = "l", ylab = "weighted mean of weather", xlab = "convergence step")
   plot(as.numeric(funcenv$par_close), type = "l", ylab = "close parameter", xlab = "convergence step")
@@ -2673,7 +2713,7 @@ modloglik_G <- function(par = par, modeloutput = modeloutput, baseline = baselin
   par(mfrow = c(3, 2))
   plot((weight / sum(weight)), type = "l", ylab = "weight", xlab = "timestep (e.g. days)", main = "Output of current weighted window being tested")
   plot(as.numeric(funcenv$par_shape), type = "l", ylab = "shape parameter", xlab = "convergence step", main = "GEV parameter values being tested")
-  plot(as.numeric(funcenv$DAICc), type = "l", ylab = expression(paste(Delta, "AICc")), xlab = "convergence step")
+  plot(as.numeric(funcenv$DAICc), type = "l", ylab = expression(paste(delta, "AICc")), xlab = "convergence step")
   plot(as.numeric(funcenv$par_scale), type = "l", ylab = "scale parameter", xlab = "convergence step")
   #plot(funcenv$modeldat$climate[1:duration], type = "s", ylab = "weighted mean of weather", xlab = "timestep (e.g. days)")
   plot(x = funcenv$modeldat$climate, y = funcenv$modeldat$yvar, type = "p", ylab = "yvar", xlab = "weighted mean of weather")
@@ -2751,7 +2791,7 @@ modloglik_W <- function(par = par,  modeloutput = modeloutput, baseline = baseli
   par(mfrow = c(3, 2))
   plot((weight/sum(weight)), type = "l", ylab = "weight", xlab = "time step (e.g days)", main = "Output of current weighted window being tested")
   plot(as.numeric(funcenv$par_shape), type = "l", ylab = "shape parameter", xlab = "convergence step", main = "Weibull parameter values being tested")
-  plot(as.numeric(funcenv$DAICc), type = "l", ylab = expression(paste(Delta, "AICc")), xlab = "convergence step")
+  plot(as.numeric(funcenv$DAICc), type = "l", ylab = expression(paste(delta, "AICc")), xlab = "convergence step")
   plot(as.numeric(funcenv$par_scale), type = "l", ylab = "scale parameter", xlab = "convergence step")
   plot(x = funcenv$modeldat$climate, y = funcenv$modeldat$yvar, type = "p", ylab = "yvar", xlab = "weighted mean of weather")
   #plot(funcenv$modeldat$climate[1:duration], type = "s", ylab = "weighted mean of weather", xlab = "time step (e.g days)")
@@ -2940,4 +2980,58 @@ theme_climwin <- function(base_size = 12, base_family = "",
     
     complete = TRUE
   )
+}
+
+
+remove_terms <- function(form, term) {
+  # function for dropping climate and its interaction terms from a 
+  # baseline model for cross validation
+  fterms <- terms(form)
+  fac <- attr(fterms, "factors")
+  idx <- which(as.logical(fac[term, ]))
+  new_fterms <- drop.terms(fterms, dropx = idx, keep.response = TRUE)
+  return(formula(new_fterms))
+}
+
+
+cross_validate <- function( fold, modeldat, baseline, modeloutput ){ 
+  
+  # Custom cross validation function to compare model predictions 
+  # 'fold' is an integer index for the current data fold 
+  # 'modeloutput' is the pre-fit climate model with all data
+  # 'modeldat' is the climate model dataframe 
+  # 'baseline' is the model fit without climate 
+  
+  output_list <- list()
+  
+  test                     <- subset(modeldat, modeldat$K == fold) # Create the test dataset
+  train                    <- subset(modeldat, modeldat$K != fold) # Create the train dataset
+  baselinecv               <- update(baseline, yvar~., data = train) # Refit the model without climate using the train dataset
+  modeloutputcv            <- update(modeloutput, yvar~., data = train)  # Refit the model with climate using the train dataset
+  test$predictions         <- predict(modeloutputcv, newdata = test, allow.new.levels = TRUE, type = "response") # Test the output of the climate model fitted using the test data
+  test$predictionsbaseline <- predict(baselinecv, newdata = test, allow.new.levels = TRUE, type = "response") # Test the output of the null models fitted using the test data
+  
+  num        <- length(test$predictions) # Determine the length of the test dataset
+  p          <- num - df.residual(modeloutputcv)  # Determine df for the climate model
+  p_baseline <- num - df.residual(baselinecv)  # Determine df for the baseline model
+  
+  if( family(baseline)[1] == 'binomial'){ 
+    # use logloss function for binomial response data 
+    logloss             <- -(test$yvar*log(test$predictions) + (1 - test$yvar)*log(1 - test$predictions))
+    logloss_baseline    <- -(test$yvar*log(test$predictionsbaseline) + (1 - test$yvar)*log(1 - test$predictionsbaseline))
+    
+    output_list$logloss <- logloss
+    output_list$logloss_baseline <- logloss_baseline
+    
+  } else { 
+    
+    #calculate mean squared errors for models with continuous predictor    
+    mse           <- sum((test$predictions - test$yvar) ^ 2) / num
+    mse_baseline  <- sum((test$predictionsbaseline - test$yvar) ^ 2) / num
+    
+    output_list$mse <- mse 
+    output_list$mse_baseline <- mse_baseline
+  }
+
+  return( data.frame(output_list)) 
 }

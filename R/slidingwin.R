@@ -79,8 +79,8 @@
 #'  2. A factor that defines which spatial group (i.e. population) climate data
 #'  corresponds to. This length of this factor should correspond to the length of
 #'  the climate dataset.
-#'@param cv_by_year TRUE or FALSE. If TRUE cross validation performed by leaving 
-#'  one year out at a time.  If FALSE cross validation by randomly assigned k-folds. 
+#'@param cv_by_cohort TRUE or FALSE. If TRUE cross validation performed by leaving 
+#'  one cohort (e.g. year) out at a time.  If FALSE cross validation by randomly assigned k-folds. 
 #'@return Will return a list with an output for each tested set of climate
 #'  window parameters. Each list item contains three objects:
 #'  
@@ -204,9 +204,9 @@
 
 slidingwin <- function(exclude = NA, xvar, cdate, bdate, baseline, 
                        type, refday, stat = "mean", func = "lin", range, 
-                       cmissing = FALSE, cinterval = "day", k = 0,
+                       cmissing = FALSE, cinterval = "day", k = 0, ncores = 1,
                        upper = NA, lower = NA, binary = FALSE, centre = list(NULL, "both"),
-                       spatial = NULL, cohort = NULL, cv_by_year = F){
+                       spatial = NULL, cohort = NULL, cv_by_cohort = F){
   
   ### Implementing scientific notation can cause problems because years
   ### are converted to characters in scientific notation (e.g. 2000 = "2e+3")
@@ -297,14 +297,24 @@ slidingwin <- function(exclude = NA, xvar, cdate, bdate, baseline,
   for (combo in 1:nrow(allcombos)){
     runs <- basewin(exclude = exclude, xvar = xvar[[paste(allcombos[combo, 1])]], cdate = cdate, bdate = bdate, baseline = baseline,
                     range = range, type = paste(allcombos[combo, 2]), refday = refday, stat = paste(allcombos[combo, 3]), func = paste(allcombos[combo, 4]),
-                    cmissing = cmissing, cinterval = cinterval, k = k, cv_by_year = cv_by_year,
+                    cmissing = cmissing, cinterval = cinterval, k = k, cv_by_cohort = cv_by_cohort,
                     upper = ifelse(binarylevel == "two" || binarylevel == "upper", allcombos$upper[combo], NA),
                     lower = ifelse(binarylevel == "two" || binarylevel == "lower", allcombos$lower[combo], NA),
                     binary = paste(allcombos$binary[combo]), centre = centre, cohort = cohort,
-                    spatial = spatial)
+                    spatial = spatial, ncores = ncores)
     
+
     combined[[combo]]            <- runs
-    allcombos$DeltaAICc[combo]   <- round(runs$Dataset$deltaAICc[1], digits = 2)
+    allcombos$deltaAICc[combo]   <- round(runs$Dataset$deltaAICc[1], digits = 2)
+    allcombos$ModelAICc[combo]   <- round(runs$Dataset$ModelAICc[1], digits = 2)
+      
+    if( !is.null(runs$Dataset$deltaMSE[1]) ){ 
+      allcombos$deltaMSE[combo]    <- round(runs$Dataset$deltaMSE[1], digits = 2)
+    }
+    if( !is.null(runs$Dataset$deltaLogLoss[1])){ 
+      allcombos$deltaLogLoss[combo]    <- round(runs$Dataset$deltaLogLoss[1], digits = 2)
+    }
+    
     allcombos$WindowOpen[combo]  <- runs$Dataset$WindowOpen[1]
     allcombos$WindowClose[combo] <- runs$Dataset$WindowClose[1]
     
