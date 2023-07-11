@@ -1,3 +1,4 @@
+
 rm(list = ls())
 library(tidyverse)
 library(parallel)
@@ -13,7 +14,6 @@ source('R/otherfunctions.R')
 # Fit a linear term (func = "lin")
 # Test at the resolution of days (cinterval = "day")
 #Mass <- head(Mass)
-
 
 Mass$climate <- 1 
 baseline <- lm( Mass ~ 1, data = Mass)
@@ -31,15 +31,19 @@ MassWin_AIC <- slidingwin(xvar = list(Temp = MassClimate$Temp),
                           k = 0, cv_by_cohort = F)
 
 
-climwin::plotdelta(MassWin_AIC[[1]]$Dataset)
-
-
 MassWin_cv <- slidingwin(xvar = list(Temp = MassClimate$Temp), cdate = MassClimate$Date,
                       bdate = Mass$Date, baseline = ix_baseline,
                       range = c(20, 0),
                       stat = c("mean"), func = "lin",
                       type = "absolute", refday = c(20, 5),
-                      cmissing = FALSE, cinterval = "day", cv_by_cohort = T, ncores = 8)
+                      cmissing = FALSE, cinterval = "day", cv_by_cohort = T, ncores = 2)
+
+my_fun <- function( x ){ print ( x )}
+
+cl <- makePSOCKcluster(2)
+clusterExport(cl, list("cross_validate"))
+parallel::parLapply(cl, 1:10, cross_validate )
+stopCluster(cl)
 
 
 climwin::plotdelta(MassWin_cv[[1]]$Dataset)

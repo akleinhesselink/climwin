@@ -856,11 +856,14 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
               options(mc.cores = parallel::detectCores())
               ncores <- min(ncores, getOption("mc.cores", 2L))
               cv_out <- parallel::mclapply( 1:k, function( i ) { cross_validate(fold = i, modeldat = modeldat, baseline = baseline, modeloutput = modeloutput) } , mc.cores = ncores )
-            }else if( ncores > 1 & .Platform$OS.type != 'windows'){ 
-              #options(mc.cores = parallel::detectCores())
-              #ncores <- min(ncores, getOption("mc.cores", 2L))
-              #cv_out <- parallel::mclapply( 1:k, function( i ) { cross_validate(fold = i, modeldat = modeldat, baseline = baseline, modeloutput = modeloutput) } , mc.cores = ncores )
-              print( "Windows Parallel" )
+            }else if( ncores > 1 & .Platform$OS.type == 'windows'){ 
+              # Parallel in windows 
+              options(mc.cores = parallel::detectCores())
+              ncores <- min(ncores, getOption("mc.cores", 2L))
+              cl <- makePSOCKcluster(ncores)
+              clusterExport(cl, list("cross_validate"))
+              cv_out <- parallel::parLapply(cl, 1:k, function( i ) { cross_validate(fold = i, modeldat = modeldat, baseline = baseline, modeloutput = modeloutput) })
+              stopCluster(cl)
               
             }else{ 
               # if Windows 
