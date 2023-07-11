@@ -5,8 +5,8 @@ library(parallel)
 library(MuMIn)
 data(Mass)
 data(MassClimate)
-source('R/slidingwin.R')
-source('R/otherfunctions.R')
+#source('R/slidingwin.R')
+#source('R/otherfunctions.R')
 
 # Test an absolute window, starting 20 May (refday = c(20, 5))
 # Test for climate windows between 100 and 0 days ago (range = c(100, 0))
@@ -45,7 +45,6 @@ MassWin_AIC[[1]]$Dataset %>% head
 MassWin_cv[[1]]$Dataset %>% head 
 # Binary logistic regression 
 
-hist( Mass$Mass)
 Mass$Binary <- Mass$Mass > 130 
 Mass$climate <- 1 
 baseline_glm <- glm( Binary ~ 1, data = Mass, family = 'binomial')
@@ -57,8 +56,6 @@ MassWin_cv_glm <- slidingwin(xvar = list(Temp = MassClimate$Temp), cdate = MassC
                          stat = c("mean"), func = "lin",
                          type = "absolute", refday = c(20, 5),
                          cmissing = FALSE, cinterval = "day", cv_by_cohort = T)
-
-MassWin_cv_glm[[1]]$Dataset %>% head
 
 MassWin_AIC_glm <- slidingwin(xvar = list(Temp = MassClimate$Temp),
                           cdate = MassClimate$Date,
@@ -75,7 +72,6 @@ MassWin_AIC_glm <- slidingwin(xvar = list(Temp = MassClimate$Temp),
 MassWin_AIC_glm[[1]]$Dataset %>% head
 MassWin_cv_glm[[1]]$Dataset %>% head 
 
-MassWin_cv_glm[[1]]$Dataset %>% View 
 
 # 
 # # Examine tested combinations
@@ -96,9 +92,6 @@ library(MuMIn)
 library(lme4)
 library(lubridate)
 library(optimx)
-
-source('R/slidingwin.R')
-source('R/otherfunctions.R')
 
 # LMER optimization options
 control_lmer = lmerControl(
@@ -130,10 +123,6 @@ growthWin <- slidingwin(xvar = list(TMAX_scaled = daily_weather$TMAX_scaled),
                         stat = 'mean',
                         func = c('lin'))
 
-elapsed2 <- Sys.time() - a 
-print(elapsed)
-print(elapsed2)
-
 growthWin[[1]]$Dataset %>% View 
 
 
@@ -148,9 +137,6 @@ library(lme4)
 library(lubridate)
 library(optimx)
 
-source('R/slidingwin.R')
-source('R/otherfunctions.R')
-
 window_open_max <- 24
 window_open_min <- 1
 
@@ -163,7 +149,7 @@ survivesWin <- slidingwin(xvar = list(TMAX_scaled = daily_weather$TMAX_scaled),
                           type = "absolute", 
                           refday = c(15, 06),
                           stat = 'mean', 
-                          func = c('lin'), cv_by_cohort = T, ncores = 8)
+                          func = c('lin'))
 
 survivesWin[[1]]$Dataset %>% arrange(ModelLogLoss) 
 

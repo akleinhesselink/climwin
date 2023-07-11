@@ -126,7 +126,7 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
     for(i in unique(data$cohort)){
         
       #Take a subset of the data for that cohort...
-      sub <- subset(data, cohort = i)
+      sub <- subset(data, cohort == i)
       #Relevel spatial...
       sub$spatial <- factor(sub$spatial)
       #Add 1 to sample size for every site in each cohort.
@@ -1329,7 +1329,7 @@ basewin_weight <- function(n, xvar, cdate, bdate, baseline, range,
       
       for(i in unique(data$cohort)){
         
-        sub <- subset(data, cohort = i)
+        sub <- subset(data, cohort == i)
         sub$spatial <- factor(sub$spatial)
         sample.size <- sample.size + length(levels(sub$spatial))
         
