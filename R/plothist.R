@@ -43,9 +43,9 @@ if(max(datasetrand$Repeat) < 100){
       }
       
       with(datasetrand, {ggplot(datasetrand, aes(x = deltaAICc, fill = Randomised))+
-                        geom_histogram(aes(y = 2 * ..density..), colour = "black", binwidth = 2, alpha = 0.5, size = 1)+
+                        geom_histogram(aes(y = 2 * after_stat(density)), colour = "black", binwidth = 2, alpha = 0.5, linewidth = 1)+
                         theme_climwin()+
-                        geom_vline(aes(xintercept = dataset$deltaAICc[1]), linetype = "dashed", size = 1.5)+
+                        geom_vline(aes(xintercept = dataset$deltaAICc[1]), linetype = "dashed", linewidth = 1.5)+
                         ggtitle(bquote(atop(Histogram~of~Delta*AICc,P[Delta*AICc]~.(P2)~~P[C]~.(P))))+
                         ylab("Proportion")+
                         xlab(expression(paste(Delta,"AICc (compared to null model)")))
@@ -59,9 +59,9 @@ if(max(datasetrand$Repeat) < 100){
         
         with(datasetrand, {
           ggplot(datasetrand, aes(x = deltaAICc)) +
-            geom_histogram(aes(y = 2 * ..density..), colour = "black", fill = "red", binwidth = 2, alpha = 0.5, size = 1) +
+            geom_histogram(aes(y = 2 * after_stat(density)), colour = "black", fill = "red", binwidth = 2, alpha = 0.5, linewidth = 1) +
             theme_climwin() +
-            geom_vline(aes(xintercept = dataset$deltaAICc[1]), linetype = "dashed", size = 1.5)+
+            geom_vline(aes(xintercept = dataset$deltaAICc[1]), linetype = "dashed", linewidth = 1.5)+
             ggtitle(bquote(atop(Histogram~of~Delta*AICc,P[Delta*AICc]~.(P2)))) +
             ylab("Proportion") +
             xlab(expression(paste(Delta, "AICc (compared to null model)")))

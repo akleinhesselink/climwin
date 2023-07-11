@@ -164,11 +164,11 @@ with(dataset, {
       ggtitle(paste(WeightDist, "% of models fall within the \n", 100*cw, "% confidence set", sep = ""))+
       ylab("Window open")+
       xlab("Window close")+
-      geom_path(data = CIRC, aes(x = WindowClose, y = WindowOpen), size = 1.2, colour = "black")+
+      geom_path(data = CIRC, aes(x = WindowClose, y = WindowOpen), linewidth = 1.2, colour = "black")+
       geom_segment(aes(x = WindowClose[1], y = 0, xend = WindowClose[1], yend = (WindowOpen[1] - 2.5)), 
-                   size = 1, linetype = "dashed") +
+                   linewidth = 1, linetype = "dashed") +
       geom_segment(aes(x = 0, y = WindowOpen[1], xend = (WindowClose[1] - 2.5), yend = WindowOpen[1]),
-                   size = 1, linetype = "dashed")
+                   linewidth = 1, linetype = "dashed")
     
     if(plotall == TRUE){
       plotallenv$cw <- ARR

@@ -710,7 +710,6 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
     #If climate has already been provided, simply update the model with the new term yvar.
     #If there are interactions, also remove climate term from baseline model
     modeloutput <- update(baseline, yvar ~., data = modeldat)
-    baseline <- update(baseline, remove_terms(formula(baseline), 'climate'))
     coef_data <- list()
     
   }
@@ -852,7 +851,7 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
           if (k >= 1) {
             
             if( ncores > 1 & .Platform$OS.type == 'unix'){
-              # if Mac or Linux use parallel 
+              # Parallel in Mac or Linux
               options(mc.cores = parallel::detectCores())
               ncores <- min(ncores, getOption("mc.cores", 2L))
               cv_out <- parallel::mclapply( 1:k, function( i ) { cross_validate(fold = i, modeldat = modeldat, baseline = baseline, modeloutput = modeloutput) } , mc.cores = ncores )
@@ -860,13 +859,13 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
               # Parallel in windows 
               options(mc.cores = parallel::detectCores())
               ncores <- min(ncores, getOption("mc.cores", 2L))
-              cl <- makePSOCKcluster(ncores)
-              clusterExport(cl, list("cross_validate"))
+              
+              cl <- parallel::makePSOCKcluster(ncores)
+              parallel::clusterExport(cl, list("cross_validate"))
               cv_out <- parallel::parLapply(cl, 1:k, function( i ) { cross_validate(fold = i, modeldat = modeldat, baseline = baseline, modeloutput = modeloutput) })
-              stopCluster(cl)
+              parallel::stopCluster(cl)
               
             }else{ 
-              # if Windows 
               cv_out <- lapply( 1:k, function( i ) { cross_validate(fold = i, modeldat = modeldat, baseline = baseline, modeloutput = modeloutput) } )
             }
             
@@ -930,7 +929,7 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
           modlist$WindowClose[modno] <- m - n + 1
           
           #Extract model coefficients (syntax is slightly different depending on the model type e.g. lme4 v. nlme v. lm)
-          if(any(grepl("climate", colnames(model.frame(modeloutput))))){
+          if(any(grepl("climate", colnames(model.frame(baseline))))){
   
               coefs <- coef(summary(modeloutput))[, 1:2]
               
@@ -1266,7 +1265,7 @@ basewin <- function(exclude, xvar, cdate, bdate, baseline, range,
     modlist$Randomised        <- "yes"
     modlist                   <- as.data.frame(modlist)
     LocalOutputRand           <- modlist[order(modlist$ModelAICc), ]
-    #LocalOutputRand$ModelAICc <- NULL
+    LocalOutputRand$ModelAICc <- NULL
   }
   
   if (nrandom == 0){
@@ -2313,16 +2312,16 @@ convertdate <- function(bdate, cdate, xvar, xvar2 = NULL, cinterval, type,
       #realbintno  <- ceiling((as.numeric(bdate) - min(as.numeric(cdate2)) + 1) / 7)
       if(is.null(spatial) == FALSE){ # If there is spatial replication...
         newclim     <- data.frame("cintno" = cintno, "xvar" = xvar, "spatial" = climspatial) # ...create a dataframe with week number, climate data and site ID...
-        newclim2    <- melt(newclim, id = c("cintno", "spatial")) # ...melt this so that we save the mean climate from each week at each site ID is seperated... #
-        newclim3    <- cast(newclim2, cintno + spatial ~ variable, mean, na.rm = T) 
+        newclim2    <- reshape::melt(newclim, id = c("cintno", "spatial")) # ...melt this so that we save the mean climate from each week at each site ID is seperated... #
+        newclim3    <- reshape::cast(newclim2, cintno + spatial ~ variable, mean, na.rm = T) 
         newclim3    <- newclim3[order(newclim3$spatial, newclim3$cintno), ] # Order data by site ID and week
         cintno      <- newclim3$cintno #Extract week numbers
         xvar        <- newclim3$xvar #Extract climate
         climspatial <- newclim3$spatial #Extract site ID
       } else { #If there is no spatial replication...
         newclim     <- data.frame("cintno" = cintno, "xvar" = xvar) # ...create data with week number and climate data 
-        newclim2    <- melt(newclim, id = "cintno") #melt so that there is mean climate data for each week 
-        newclim3    <- cast(newclim2, cintno ~ variable, mean, na.rm = T)
+        newclim2    <- reshape::melt(newclim, id = "cintno") #melt so that there is mean climate data for each week 
+        newclim3    <- reshape::cast(newclim2, cintno ~ variable, mean, na.rm = T)
         cintno      <- newclim3$cintno #Extract week numbers
         xvar        <- newclim3$xvar #Extract climate
       }
@@ -2334,7 +2333,7 @@ convertdate <- function(bdate, cdate, xvar, xvar2 = NULL, cinterval, type,
         for(i in unique(cohort)){ # For each cohort...
           sub                               <- subset(newdat, cohort == i) #...subset out biological date data
           #Turn this date info into the same values based on refday
-          bintno[as.numeric(rownames(sub))] <- lubridate::week(as.Date(paste(refday[1], refday[2], min(lubridate::year(sub$bdate)), sep = "-"), format = "%d-%m-%Y")) + 52 * (min(lubridate::year(sub$bdate)) - min(year(cdate2)))
+          bintno[as.numeric(rownames(sub))] <- lubridate::week(as.Date(paste(refday[1], refday[2], min(lubridate::year(sub$bdate)), sep = "-"), format = "%d-%m-%Y")) + 52 * (min(lubridate::year(sub$bdate)) - min(lubridate::year(cdate2)))
             #lubridate::week(as.Date(paste(refday[1], refday[2], min(lubridate::year(sub$bdate)), sep = "-"), format = "%d-%m-%Y")) - min(cweek + 53 * cyear) + 1
         }
       } else { #...Otherwise just leave the biological date info as is.
@@ -2388,8 +2387,8 @@ convertdate <- function(bdate, cdate, xvar, xvar2 = NULL, cinterval, type,
       
       if(is.null(spatial) == FALSE){ # If spatial replication is used...
         newclim     <- data.frame("cintno" = cintno, "xvar" = xvar, "spatial" = climspatial) #Create a new dataframe with month number, climate data and site ID
-        newclim2    <- melt(newclim, id = c("cintno", "spatial")) #Melt to just have mean climate for each month number and site ID
-        newclim3    <- cast(newclim2, cintno + spatial ~ variable, mean, na.rm = T)
+        newclim2    <- reshape::melt(newclim, id = c("cintno", "spatial")) #Melt to just have mean climate for each month number and site ID
+        newclim3    <- reshape::cast(newclim2, cintno + spatial ~ variable, mean, na.rm = T)
         newclim3    <- newclim3[order(newclim3$spatial, newclim3$cintno), ] #Order by site ID and month
         cintno      <- newclim3$cintno #Save month, climate data and site ID
         xvar        <- newclim3$xvar
@@ -2439,16 +2438,16 @@ convertdate <- function(bdate, cdate, xvar, xvar2 = NULL, cinterval, type,
       #realbintno <- ceiling((as.numeric(bdate) - min(as.numeric(cdate2)) + 1) / 7)
       if(is.null(spatial) == FALSE){ #When spatial data is available
         newclim     <- data.frame("cintno" = cintno, "xvar" = xvar, "xvar2" = xvar2, "spatial" = climspatial) #Create a dataset with both climate variables and siteID
-        newclim2    <- melt(newclim, id = c("cintno", "spatial")) #Determine mean values for both climate variables each week at each site
-        newclim3    <- cast(newclim2, cintno + spatial ~ variable, mean, na.rm = T)
+        newclim2    <- reshape::melt(newclim, id = c("cintno", "spatial")) #Determine mean values for both climate variables each week at each site
+        newclim3    <- reshape::cast(newclim2, cintno + spatial ~ variable, mean, na.rm = T)
         cintno      <- newclim3$cintno #Save info.
         xvar        <- newclim3$xvar
         xvar2       <- newclim3$xvar2
         climspatial <- newclim3$spatial
       } else { #If there is no spatial data, do the same but without site ID.
         newclim    <- data.frame("cintno" = cintno, "xvar" = xvar, "xvar2" = xvar2)
-        newclim2   <- melt(newclim, id = "cintno")
-        newclim3   <- cast(newclim2, cintno ~ variable, mean, na.rm = T)
+        newclim2   <- reshape::melt(newclim, id = "cintno")
+        newclim3   <- reshape::cast(newclim2, cintno ~ variable, mean, na.rm = T)
         cintno     <- newclim3$cintno
         xvar       <- newclim3$xvar
         xvar2      <- newclim3$xvar2 
@@ -2473,16 +2472,16 @@ convertdate <- function(bdate, cdate, xvar, xvar2 = NULL, cinterval, type,
       realbintno <- lubridate::month(bdate) + 12 * (year(bdate) - min(year(cdate2)))
       if(is.null(spatial) == FALSE){ #If spatial data is used...
         newclim     <- data.frame("cintno" = cintno, "xvar" = xvar, "xvar2" = xvar2, "spatial" = climspatial) #Extract both climate variables and site ID
-        newclim2    <- melt(newclim, id = c("cintno", "spatial")) #Determine mean climate for each climate variable at each site for each month.
-        newclim3    <- cast(newclim2, cintno + spatial ~ variable, mean, na.rm = T)
+        newclim2    <- reshape::melt(newclim, id = c("cintno", "spatial")) #Determine mean climate for each climate variable at each site for each month.
+        newclim3    <- reshape::cast(newclim2, cintno + spatial ~ variable, mean, na.rm = T)
         cintno      <- newclim3$cintno #Save extracted data.
         xvar        <- newclim3$xvar
         xvar2       <- newclim3$xvar2
         climspatial <- newclim3$spatial
       } else { #If no spatial data is provided, just determine mean for both climate variables in each month.
         newclim    <- data.frame("cintno" = cintno, "xvar" = xvar, "xvar2" = xvar2)
-        newclim2   <- melt(newclim, id = "cintno")
-        newclim3   <- cast(newclim2, cintno ~ variable, mean, na.rm = T)
+        newclim2   <- reshape::melt(newclim, id = "cintno")
+        newclim3   <- reshape::cast(newclim2, cintno ~ variable, mean, na.rm = T)
         cintno     <- newclim3$cintno
         xvar       <- newclim3$xvar
         xvar2      <- newclim3$xvar2 
@@ -2881,12 +2880,12 @@ theme_climwin <- function(base_size = 12, base_family = "",
     # Elements in this first block aren't used directly, but are inherited
     # by others. These set the defaults for line, rectangle and text elements.
     line =               element_line(
-      colour = "black", size = base_line_size,
+      colour = "black", linewidth = base_line_size,
       linetype = 1, lineend = "round"
     ),
     rect =               element_rect(
       fill = "white", colour = "black",
-      size = base_rect_size, linetype = 1
+      linewidth = base_rect_size, linetype = 1
     ),
     text =               element_text(
       family = base_family, face = "plain",
@@ -2903,7 +2902,7 @@ theme_climwin <- function(base_size = 12, base_family = "",
     axis.text.x.top =    element_text(margin = margin(b = 0.8 * half_line / 2), vjust = 0),
     axis.text.y =        element_text(margin = margin(r = 0.8 * half_line / 2), hjust = 1),
     axis.text.y.right =  element_text(margin = margin(l = 0.8 * half_line / 2), hjust = 0),
-    axis.ticks =         element_line(colour = "black", lineend = "round", size = 1),
+    axis.ticks =         element_line(colour = "black", lineend = "round", linewidth = 1),
     axis.ticks.length =  unit(half_line / 2, "pt"),
     axis.title.x =       element_text(
       margin = margin(t = half_line * 1.5),
@@ -2941,7 +2940,7 @@ theme_climwin <- function(base_size = 12, base_family = "",
     legend.text = element_text(family = base_family, size = rel(1)),
     
     panel.background =   element_rect(fill = "white", colour = NA),
-    panel.border =       element_rect(colour = "black", fill = NA, size = 1.5),
+    panel.border =       element_rect(colour = "black", fill = NA, linewidth = 1.5),
     panel.grid.major =   element_blank(),
     panel.grid.minor =   element_blank(),
     panel.spacing =      unit(half_line, "pt"),
@@ -3009,6 +3008,12 @@ cross_validate <- function( fold, modeldat, baseline, modeloutput ){
   
   test                     <- subset(modeldat, modeldat$K == fold) # Create the test dataset
   train                    <- subset(modeldat, modeldat$K != fold) # Create the train dataset
+
+  if(any( grepl('climate', formula(baseline)))){
+    # Drop climate from the baseline model before refitting with training data
+    baseline <- update(baseline, remove_terms(formula(baseline), 'climate'))
+  }
+  
   baselinecv               <- update(baseline, yvar~., data = train) # Refit the model without climate using the train dataset
   modeloutputcv            <- update(modeloutput, yvar~., data = train)  # Refit the model with climate using the train dataset
   test$predictions         <- predict(modeloutputcv, newdata = test, allow.new.levels = TRUE, type = "response") # Test the output of the climate model fitted using the test data

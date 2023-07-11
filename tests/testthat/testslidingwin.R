@@ -45,8 +45,8 @@ test_that("slidingwin produces the right output", {
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 4]))), 0)
   
   # Test that all columns were created in the dataset
-  expect_true(ncol(test[[1]]$Dataset) == 17)
-  
+  expect_true(ncol(test[[1]]$Dataset) == 18) # adding a ModelAICc column
+
   # Test that the correct number of models were recorded in the dataset
   expect_equal(maxmodno, nrow(test[[1]]$Dataset))
   
@@ -653,10 +653,64 @@ test_that("lmer [lme4] models can run in slidingwin with cross-validation", {
   # Test that best model data has at least 2 parameters
   expect_true(ncol(test[[1]]$BestModelData) >= 2)
   
-  #Test the values we get out have stayed the same as our last R version
-  expect_true(round(test[[1]]$Dataset$deltaAICc[1], 1) == -26.3)
+  # Test the values we get out have stayed the same as our last R version
+  # !!Calculating model AIC from MSE for out of sample cross validation may not make sense. 
+  # See calculation below for previous test on deltaAICc
+  # old test: expect_true(round(test[[1]]$Dataset$deltaAICc[1], 1) == -26.3)
+  
+  # Test deltaMSE instead 
+  expect_true( round(test[[1]]$Dataset$deltaMSE[1], 3) == round( -0.04131815, 3))
+  
+  # Test deltaAIC for full model  
+  expect_true(round( test[[1]]$Dataset$deltaAICc[[1]], 4) == -55.3097)
+  
+  # Test that correct window is selected 
   expect_true(test[[1]]$Dataset$WindowOpen[1] == 2 & test[[1]]$Dataset$WindowClose[1] == 2)
   expect_true(round(test[[1]]$Dataset$ModelBeta[1], 1) == 0.0)
+  
+  # Old way of calculating deltaAIC using out of sample MSE 
+  k <- 2
+  library(MuMIn)
+  #source('R/singlewin.R')
+  b <- lmer(Offspring ~ 1 + (1|BirdID), data = Offspring, REML = F)
+  out <- singlewin(list(OffspringClimate$Temp), OffspringClimate$Date, Offspring$Date, b, c(2,2), "relative", stat = "max", func = "lin", cmissing=FALSE)
+  a <- out$BestModel
+  AICc(a) - AICc(b)
+  dat <- a@frame
+  dat$Offspring <- dat$yvar
+  set.seed(666)
+  
+  dat$K <- sample(seq(from = 1, to = length(dat$climate), by = 1) %% k + 1)
+  
+  folds <- 2
+  foldFit <- NA
+  for( i in 1:folds){ 
+    train <- subset(dat, dat$K == i)
+    test <- subset( dat, dat$K != i)
+    a <- update( a , data = train)
+    b <- update( b, data = train )
+    
+    test$predictions <- predict(a, newdata = test, allow.new.levels = T)
+    test$predictionsbaseline <- predict(b, newdata = test, allow.new.levels = T)
+    
+    num        <- length(test$yvar) # Determine the length of the test dataset
+    p          <- num - df.residual(a)  # Determine df for the climate model
+    mse        <- sum((test$predictions - test[, 1]) ^ 2) / num
+    mse_baseline <- sum((test$predictionsbaseline - test[, 1]) ^ 2) / num
+    
+    p_baseline <- num - df.residual(b)  # Determine df for the baseline model
+    #   #calculate mean standard errors for climate model
+    #   #calc mse only works non-categorical yvars, e.g. normal, binary, count data 
+    #   #calculate mean standard errors for null model
+    AICc_cv          <- num * log(mse) + (2 * p * (p + 1)) / (num - p - 1)
+    AICc_cv_baseline <- num * log(mse_baseline) + (2 * p_baseline * (p_baseline + 1)) / (num - p_baseline - 1)
+    
+    foldFit[i] <- AICc_cv - AICc_cv_baseline
+    
+  }
+  
+  # old way of calculating delta MSE 
+  expect_true( round( mean(foldFit), 1) == -26.3 )
   
 })
 
@@ -726,9 +780,57 @@ test_that("glmer [lme4] models can run in slidingwin with cross-validation", {
   expect_true(ncol(test[[1]]$BestModelData) >= 2)
   
   #Test the values we get out have stayed the same as our last R version
-  expect_true(round(test[[1]]$Dataset$deltaAICc[1], 1) == -6.5)
+  # calculating deltaAICc from MSE may not make sense! 
+  # changing test to deltaMSE, see old calculation and test below 
+  # old test: expect_true(round(test[[1]]$Dataset$deltaAICc[1], 1) == -6.5) 
+  
+  expect_true( round( test[[1]]$Dataset$deltaMSE[1], 2)  == -0.01)
+  
   expect_true(test[[1]]$Dataset$WindowOpen[1] == 1 & test[[1]]$Dataset$WindowClose[1] == 1)
   expect_true(round(test[[1]]$Dataset$ModelBeta[1], 1) == 0.0)
+  
+  # Old way of calculating deltaAIC using out of sample MSE 
+  k <- 2
+  library(MuMIn)
+  #source('R/singlewin.R')
+  b <- glmer(Offspring ~ 1 + (1|Order), data = Offspring, family = "poisson")
+  out <- singlewin(list(OffspringClimate$Temp), OffspringClimate$Date, Offspring$Date, b, c(1,1), "relative", stat = "max", func = "lin", cmissing=FALSE)
+  a <- out$BestModel
+  AICc(a) - AICc(b)
+  dat <- a@frame
+  dat$Offspring <- dat$yvar
+  set.seed(666)
+  dat$K <- sample(seq(from = 1, to = length(dat$climate), by = 1) %% k + 1)
+  
+  folds <- 2
+  foldFit <- NA
+  for( i in 1:folds){ 
+    train <- subset(dat, dat$K == i)
+    test <- subset( dat, dat$K != i)
+    a <- update( a , data = train)
+    b <- update( b, data = train )
+    
+    test$predictions <- predict(a, newdata = test, allow.new.levels = T, type = 'response')
+    test$predictionsbaseline <- predict(b, newdata = test, allow.new.levels = T, type = 'response')
+    
+    num        <- length(test$yvar) # Determine the length of the test dataset
+    p          <- num - df.residual(a)  # Determine df for the climate model
+    mse        <- sum((test$predictions - test[, 1]) ^ 2) / num
+    mse_baseline <- sum((test$predictionsbaseline - test[, 1]) ^ 2) / num
+    
+    p_baseline <- num - df.residual(b)  # Determine df for the baseline model
+    #   #calculate mean standard errors for climate model
+    #   #calc mse only works non-categorical yvars, e.g. normal, binary, count data 
+    #   #calculate mean standard errors for null model
+    AICc_cv          <- num * log(mse) + (2 * p * (p + 1)) / (num - p - 1)
+    AICc_cv_baseline <- num * log(mse_baseline) + (2 * p_baseline * (p_baseline + 1)) / (num - p_baseline - 1)
+    
+    foldFit[i] <- AICc_cv - AICc_cv_baseline
+    
+  }
+  
+  # old way of calculating delta MSE 
+  expect_true( round( mean(foldFit), 1) == -6.5 )
   
 })
 
@@ -976,10 +1078,10 @@ test_that("Quadratic function works", {
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 5]))), 0)
   
   # Test that the quad function has been used
-  expect_true(test[[1]]$Dataset[1, 10] == "quad")
+  expect_true(test[[1]]$Dataset$Function[1] == "quad")
   
-  # Test that the dataset is atleast 17 columns (one extra column for quad SE)
-  expect_true(ncol(test[[1]]$Dataset) == 18)
+  # Test that the dataset is 19 columns (one extra column for quad SE)
+  expect_true(ncol(test[[1]]$Dataset) == 19)
   
   # Test that the right number of models was fitted
   expect_equal(maxmodno, nrow(test[[1]]$Dataset))
@@ -1025,10 +1127,10 @@ test_that("Cubic function works", {
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 6]))), 0)
   
   # Test that the cub function has been used
-  expect_true(test[[1]]$Dataset[1, 11] == "cub")
+  expect_true(test[[1]]$Dataset$Function[1] == "cub")
   
-  # Test that the dataset is atleast 18 columns (extra columns for quad and cub SE)
-  expect_true(ncol(test[[1]]$Dataset) == 19)
+  # Test that the dataset is atleast 20 columns (extra columns for quad and cub SE)
+  expect_true(ncol(test[[1]]$Dataset) == 20)
   
   # Test that the right number of models was fitted
   expect_equal(maxmodno, nrow(test[[1]]$Dataset))
@@ -1074,10 +1176,10 @@ test_that("Log function works", {
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 4]))), 0)
   
   # Test that log function has been used
-  expect_true(test[[1]]$Dataset[1, 9] == "log")
+  expect_true(test[[1]]$Dataset$Function[1] == "log")
   
-  # Test that the dataset is atleast 16 columns (no extra columns)
-  expect_true(ncol(test[[1]]$Dataset) == 17)
+  # Test that the dataset is 18 columns (no extra columns)
+  expect_true(ncol(test[[1]]$Dataset) == 18)
   
   # Test that the right number of models was fitted
   expect_equal(maxmodno, nrow(test[[1]]$Dataset))
@@ -1123,10 +1225,10 @@ test_that("Inverse function works", {
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 4]))), 0)
   
   # Test that the inv function has been used
-  expect_true(test[[1]]$Dataset[1, 9] == "inv")
+  expect_true(test[[1]]$Dataset$Function[1] == "inv")
   
-  # Test that the dataset is atleast 16 columns (no extra columns)
-  expect_true(ncol(test[[1]]$Dataset) == 17)
+  # Test that the dataset is 18 columns (no extra columns)
+  expect_true(ncol(test[[1]]$Dataset) == 18)
   
   # Test that the right number of models was fitted
   expect_equal(maxmodno, nrow(test[[1]]$Dataset))
@@ -1287,8 +1389,8 @@ test_that("Mean centring is functioning", {
   # Test that there are no NAs in wgdev
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 6]))), 0)
   
-  # Test that there are 16 columns in the dataset
-  expect_true(ncol(test[[1]]$Dataset) == 17)
+  # Test that there are 18 columns in the dataset
+  expect_true(ncol(test[[1]]$Dataset) == 18)
   
   # Test that dataset is not randomised
   expect_true((test[[1]]$Dataset["Randomised"])[1, ] == "no")
@@ -1302,7 +1404,7 @@ test_that("Mean centring is functioning", {
 })
 
 # Test centring with only wgmean #
-test_that("Mean centring is functioning with only wgmeans", {
+test_that("Mean centering is functioning with only wgmeans", {
   
   data(Offspring, envir = environment())
   data(OffspringClimate, envir = environment())
@@ -1331,8 +1433,8 @@ test_that("Mean centring is functioning with only wgmeans", {
   # Test that there are no NAs in wgdev
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 6]))), 0)
   
-  # Test that there are 14 columns in the dataset (remove wgdev and SE)
-  expect_true(ncol(test[[1]]$Dataset) == 15)
+  # Test that there are 16 columns in the dataset (remove wgdev and SE)
+  expect_true(ncol(test[[1]]$Dataset) == 16)
   
   # Test that dataset is not randomised
   expect_true((test[[1]]$Dataset["Randomised"])[1, ] == "no")
@@ -1374,8 +1476,8 @@ test_that("Mean centring is functioning with only wgdev", {
   # Test that there are no NAs in wgdev
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 6]))), 0)
   
-  # Test that there are 14 columns in the dataset (remove wgmean and SE)
-  expect_true(ncol(test[[1]]$Dataset) == 15)
+  # Test that there are 16 columns in the dataset (remove wgmean and SE)
+  expect_true(ncol(test[[1]]$Dataset) == 16)
   
   # Test that dataset is not randomised
   expect_true((test[[1]]$Dataset["Randomised"])[1, ] == "no")
@@ -1703,7 +1805,7 @@ test_that("slidingwin produces the right output with monthly climate data", {
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 4]))), 0)
   
   # Test that all columns were created in the dataset
-  expect_true(ncol(test[[1]]$Dataset) == 17)
+  expect_true(ncol(test[[1]]$Dataset) == 18)
   
   # Test that the correct number of models were recorded in the dataset
   expect_equal(maxmodno, nrow(test[[1]]$Dataset))
@@ -1754,7 +1856,7 @@ test_that("slidingwin produces the right output when using weights in model", {
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 4]))), 0)
   
   # Test that all columns were created in the dataset
-  expect_true(ncol(test[[1]]$Dataset) == 17)
+  expect_true(ncol(test[[1]]$Dataset) == 18)
   
   # Test that the correct number of models were recorded in the dataset
   expect_equal(maxmodno, nrow(test[[1]]$Dataset))
@@ -1802,7 +1904,7 @@ test_that("slidingwin produces the right output when using equal weights in mode
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 4]))), 0)
   
   # Test that all columns were created in the dataset
-  expect_true(ncol(test[[1]]$Dataset) == 17)
+  expect_true(ncol(test[[1]]$Dataset) == 18)
   
   # Test that the correct number of models were recorded in the dataset
   expect_equal(maxmodno, nrow(test[[1]]$Dataset))
@@ -1853,7 +1955,7 @@ test_that("slidingwin works when cmax(cdate) == max(bdate)", {
   expect_equal(length(which(is.na(test[[1]]$Dataset[, 4]))), 0)
   
   # Test that all columns were created in the dataset
-  expect_true(ncol(test[[1]]$Dataset) == 19)
+  expect_true(ncol(test[[1]]$Dataset) == 20)
   
   # Test that the correct number of models were recorded in the dataset
   expect_equal(maxmodno, nrow(test[[1]]$Dataset))

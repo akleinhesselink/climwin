@@ -55,7 +55,7 @@ plotwin <- function(dataset, cw = 0.95){
                 size = 5, vjust = -1.9) +
       coord_flip()+
       theme_climwin()+
-      theme(axis.text.y = element_text(angle = 90, hjust = 0.5,size = 10))+
+      theme(axis.text.y = element_text(angle = 90, hjust = 0.5, size = 10))+
       ggtitle(paste("Climate window range for \n", (cw*100), "% confidence set"))+
       xlab("")+
       ylab("Climate window")

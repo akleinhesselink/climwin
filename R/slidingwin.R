@@ -53,6 +53,8 @@
 #'@param k The number of folds used for k-fold cross validation. By default
 #'  this value is set to 0, so no cross validation occurs. Value should be a
 #'  minimum of 2 for cross validation to occur.
+#'@param ncores The number of cores to use for parallel processing of k-fold 
+#'  cross validation.  
 #'@param upper Cut-off values used to determine growing degree days or positive 
 #'  climate thresholds (depending on parameter thresh). Note that when values
 #'  of lower and upper are both provided, slidingwin will instead calculate an 

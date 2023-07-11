@@ -84,7 +84,7 @@ plotcor <- function(cor.output, type, arrow = FALSE){
         theme_classic()+
         theme(panel.grid.major = element_blank(),
               panel.grid.minor = element_blank(),
-              axis.line = element_line(size = 0.25, colour = "black"),
+              axis.line = element_line(linewidth = 0.25, colour = "black"),
               plot.title = element_text(size = 16, hjust = 0.5))+
         ggtitle(title)+
         ylab("Window open")+
@@ -98,7 +98,7 @@ plotcor <- function(cor.output, type, arrow = FALSE){
           theme_classic()+
           theme(panel.grid.major = element_blank(),
                 panel.grid.minor = element_blank(),
-                axis.line = element_line(size = 0.25, colour = "black"),
+                axis.line = element_line(linewidth = 0.25, colour = "black"),
                 plot.title = element_text(size = 16, hjust = 0.5))+
           ggtitle(title)+
           ylab("Window open")+
@@ -116,16 +116,16 @@ plotcor <- function(cor.output, type, arrow = FALSE){
           theme_classic()+
           theme(panel.grid.major = element_blank(),
                 panel.grid.minor = element_blank(),
-                axis.line = element_line(size = 0.25, colour = "black"),
+                axis.line = element_line(linewidth = 0.25, colour = "black"),
                 plot.title = element_text(size = 16, hjust = 0.5))+
           ggtitle(title)+
           ylab("Window open")+
           xlab("Window close")+
-          geom_path(data = CIRC, aes(x = WindowClose, y = WindowOpen), size = 1.2, colour = "black")+
+          geom_path(data = CIRC, aes(x = WindowClose, y = WindowOpen), linewidth = 1.2, colour = "black")+
           geom_segment(aes(x = BestWindowClose[1], y = 0, xend = BestWindowClose[1], yend = (BestWindowOpen[1] - 2.5)), 
-                       size = 1, linetype = "dashed") +
+                       linewidth = 1, linetype = "dashed") +
           geom_segment(aes(x = 0, y = BestWindowOpen[1], xend = (BestWindowClose[1] - 2.5), yend = BestWindowOpen[1]),
-                       size = 1, linetype = "dashed")
+                       linewidth = 1, linetype = "dashed")
       }
     }
   }

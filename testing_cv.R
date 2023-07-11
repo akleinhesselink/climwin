@@ -30,6 +30,7 @@ MassWin_AIC <- slidingwin(xvar = list(Temp = MassClimate$Temp),
                           func = "lin", 
                           k = 0, cv_by_cohort = F)
 
+MassWin_AIC[[1]]$Dataset %>% View 
 
 MassWin_cv <- slidingwin(xvar = list(Temp = MassClimate$Temp), cdate = MassClimate$Date,
                       bdate = Mass$Date, baseline = ix_baseline,
@@ -38,16 +39,10 @@ MassWin_cv <- slidingwin(xvar = list(Temp = MassClimate$Temp), cdate = MassClima
                       type = "absolute", refday = c(20, 5),
                       cmissing = FALSE, cinterval = "day", cv_by_cohort = T, ncores = 2)
 
-my_fun <- function( x ){ print ( x )}
-
-cl <- makePSOCKcluster(2)
-clusterExport(cl, list("cross_validate"))
-parallel::parLapply(cl, 1:10, cross_validate )
-stopCluster(cl)
-
-
 climwin::plotdelta(MassWin_cv[[1]]$Dataset)
 
+MassWin_AIC[[1]]$Dataset %>% head
+MassWin_cv[[1]]$Dataset %>% head 
 # Binary logistic regression 
 
 hist( Mass$Mass)
@@ -62,7 +57,8 @@ MassWin_cv_glm <- slidingwin(xvar = list(Temp = MassClimate$Temp), cdate = MassC
                          stat = c("mean"), func = "lin",
                          type = "absolute", refday = c(20, 5),
                          cmissing = FALSE, cinterval = "day", cv_by_cohort = T)
-MassWin_cv_glm
+
+MassWin_cv_glm[[1]]$Dataset %>% head
 
 MassWin_AIC_glm <- slidingwin(xvar = list(Temp = MassClimate$Temp),
                           cdate = MassClimate$Date,
@@ -76,8 +72,8 @@ MassWin_AIC_glm <- slidingwin(xvar = list(Temp = MassClimate$Temp),
                           k = 0, cv_by_cohort = F)
 
 
-MassWin_AIC_glm
-MassWin_cv_glm
+MassWin_AIC_glm[[1]]$Dataset %>% head
+MassWin_cv_glm[[1]]$Dataset %>% head 
 
 MassWin_cv_glm[[1]]$Dataset %>% View 
 
