@@ -311,10 +311,10 @@ slidingwin <- function(exclude = NA, xvar, cdate, bdate, baseline,
     allcombos$ModelAICc[combo]   <- round(runs$Dataset$ModelAICc[1], digits = 2)
       
     if( !is.null(runs$Dataset$deltaMSE[1]) ){ 
-      allcombos$deltaMSE[combo]    <- round(runs$Dataset$deltaMSE[1], digits = 2)
+      allcombos$deltaMSE[combo]    <- round(runs$Dataset$deltaMSE[1], digits = 4)
     }
     if( !is.null(runs$Dataset$deltaLogLoss[1])){ 
-      allcombos$deltaLogLoss[combo]    <- round(runs$Dataset$deltaLogLoss[1], digits = 2)
+      allcombos$deltaLogLoss[combo]    <- round(runs$Dataset$deltaLogLoss[1], digits = 4)
     }
     
     allcombos$WindowOpen[combo]  <- runs$Dataset$WindowOpen[1]

@@ -18,12 +18,14 @@ slidingwin(
   cmissing = FALSE,
   cinterval = "day",
   k = 0,
+  ncores = 1,
   upper = NA,
   lower = NA,
   binary = FALSE,
   centre = list(NULL, "both"),
   spatial = NULL,
-  cohort = NULL
+  cohort = NULL,
+  cv_by_cohort = F
 )
 }
 \arguments{
@@ -85,6 +87,9 @@ of cinterval.}
 this value is set to 0, so no cross validation occurs. Value should be a
 minimum of 2 for cross validation to occur.}
 
+\item{ncores}{The number of cores to use for parallel processing of k-fold 
+cross validation.}
+
 \item{upper}{Cut-off values used to determine growing degree days or positive 
 climate thresholds (depending on parameter thresh). Note that when values
 of lower and upper are both provided, slidingwin will instead calculate an 
@@ -116,6 +121,9 @@ the climate dataset.}
 \item{cohort}{A variable used to group biological records that occur in the same biological
 season but cover multiple years (e.g. southern hemisphere breeding season). Only required
 when type is "absolute". The cohort variable should be in the same dataset as the variable bdate.}
+
+\item{cv_by_cohort}{TRUE or FALSE. If TRUE cross validation performed by leaving 
+one cohort (e.g. year) out at a time.  If FALSE cross validation by randomly assigned k-folds.}
 }
 \value{
 Will return a list with an output for each tested set of climate

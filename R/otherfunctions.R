@@ -2985,14 +2985,27 @@ theme_climwin <- function(base_size = 12, base_family = "",
 }
 
 
-remove_terms <- function(form, term) {
-  # function for dropping climate and its interaction terms from a 
+# remove_terms <- function(form, term) {
+#   # function for dropping climate and its interaction terms from a
+#   # baseline model for cross validation
+#   fterms <- terms(form)
+#   fac <- attr(fterms, "factors")
+#   idx <- which(as.logical(fac[term, ]))
+#   new_fterms <- drop.terms(fterms, dropx = idx, keep.response = TRUE)
+#   
+#   if( grep( pattern = '\\|', x = as.character(new_fterms[[3]]))){ 
+#     print("yes")
+#   }
+#   
+#   return(formula(new_fterms))
+# }
+
+remove_terms <- function( form, term){ 
+  # function for dropping climate and its interaction terms from a
   # baseline model for cross validation
-  fterms <- terms(form)
-  fac <- attr(fterms, "factors")
-  idx <- which(as.logical(fac[term, ]))
-  new_fterms <- drop.terms(fterms, dropx = idx, keep.response = TRUE)
-  return(formula(new_fterms))
+  charForm <- deparse( form ) 
+  charForm <- gsub(x = charForm, pattern = paste0( "(\\:)?", term, "(\\:)?"), replacement = "")
+  return( formula( charForm ))
 }
 
 
@@ -3014,8 +3027,16 @@ cross_validate <- function( fold, modeldat, baseline, modeloutput ){
     baseline <- update(baseline, remove_terms(formula(baseline), 'climate'))
   }
   
-  baselinecv               <- update(baseline, yvar~., data = train) # Refit the model without climate using the train dataset
-  modeloutputcv            <- update(modeloutput, yvar~., data = train)  # Refit the model with climate using the train dataset
+  if(inherits( try(update(baseline, REML = T),silent = T), 'try-error')){ 
+    baselinecv               <- update(baseline, yvar~., data = train) # Refit the model without climate using the train dataset
+    modeloutputcv            <- update(modeloutput, yvar~., data = train)  # Refit the model with climate using the train dataset
+    
+  }else{ 
+    baselinecv               <- update(baseline, yvar~., data = train, REML = T) # Refit the model without climate using the train dataset
+    modeloutputcv            <- update(modeloutput, yvar~., data = train, REML = T)  # Refit the model with climate using the train dataset
+    
+  }
+  
   test$predictions         <- predict(modeloutputcv, newdata = test, allow.new.levels = TRUE, type = "response") # Test the output of the climate model fitted using the test data
   test$predictionsbaseline <- predict(baselinecv, newdata = test, allow.new.levels = TRUE, type = "response") # Test the output of the null models fitted using the test data
   

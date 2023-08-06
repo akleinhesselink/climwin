@@ -1,8 +1,10 @@
-#' Plot deltaAICc of models
+#' Plot deltaAICc or other measure of model fit
 #' 
 #'Create a colour plot of model deltaAICc values.
 #'@param dataset A dataframe containing information on all fitted climate 
 #' windows. Output from \code{\link{slidingwin}}.
+#'@param fitStat A character string giving name of measure model fit to plot 
+#'from dataset of fitted climate windows. 
 #'@param plotall Used in conjunction with function \code{\link{plotall}}. 
 #' Should not be changed manually.
 #'@param plotallenv Used in conjunction with function \code{\link{plotall}}.
@@ -19,11 +21,11 @@
 #'data(MassOutput)
 #' 
 #'plotdelta(dataset = MassOutput)
-#'@import ggplot2
+#'@import ggplot2 stringr
 #'@importFrom grDevices colorRampPalette
 #'@export
-
-plotdelta <- function(dataset, arrow = FALSE, plotall = FALSE, plotallenv, ThreeD = FALSE){
+#'
+plotdelta <- function(dataset, fitStat = 'deltaAICc', arrow = FALSE, plotall = FALSE, plotallenv, ThreeD = FALSE){
   
   if(ThreeD == TRUE){
     
@@ -51,49 +53,49 @@ plotdelta <- function(dataset, arrow = FALSE, plotall = FALSE, plotallenv, Three
     
   } else {
     
-with(dataset, {
-  if(arrow == FALSE){
-    ARR <-   ggplot(dataset, aes(x = WindowClose, y = WindowOpen, z = deltaAICc))+
-      geom_tile(aes(fill = deltaAICc))+
-      scale_fill_gradientn(colours = c("red", "yellow", "blue"), name = "")+
-      theme_climwin()+
-      theme(legend.position = c(0.75, 0.3))+
-      ggtitle(expression(paste(Delta, "AICc (compared to null model)")))+
-      ylab("Window open")+
-      xlab("Window close")
-    if(plotall == TRUE){
-      plotallenv$delta <- ARR
-    } else {
-      ARR
-    }
-  } else if(arrow == TRUE){
-    
-    CIRC <- circle(centre = c(dataset$WindowClose[1], dataset$WindowOpen[1]), diameter = 5, npoints = 100)
-    colnames(CIRC) <- c("WindowClose", "WindowOpen")
-    CIRC$deltaAICc <- 0
-    
-    ARR <-   ggplot(dataset, aes(x = WindowClose, y = WindowOpen, z = deltaAICc))+
-      geom_tile(aes(fill = deltaAICc))+
-      scale_fill_gradientn(colours = c("red", "yellow", "blue"), name = "")+
-      theme_climwin()+
-      theme(legend.position = c(0.75, 0.3))+
-      ggtitle(expression(paste(Delta, "AICc (compared to null model)")))+
-      ylab("Window open") +
-      xlab("Window close") +
-      geom_path(data = CIRC, aes(x = WindowClose, y = WindowOpen), size = 1.2, colour = "black")+
-      geom_segment(aes(x = WindowClose[1], y = 0, xend = WindowClose[1], yend = (WindowOpen[1] - 2.5)), 
-                   size = 1, linetype = "dashed") +
-      geom_segment(aes(x = 0, y = WindowOpen[1], xend = (WindowClose[1] - 2.5), yend = WindowOpen[1]),
-                   size = 1, linetype = "dashed")
-    
-    if(plotall == TRUE){
-      plotallenv$delta <- ARR
-    } else {
-      ARR
-    }
+    with(dataset, {
+      if(arrow == FALSE){
+        stat_lab <- str_remove( expr(!!fitStat), "delta")
+        ARR <-   ggplot(dataset, aes(x = WindowClose, y = WindowOpen, z = .data[[fitStat]]))+
+          geom_tile(aes(fill = .data[[fitStat]]))+
+          scale_fill_gradientn(colours = c("red", "yellow", "blue"), name = "")+
+          theme_climwin()+
+          theme(legend.position = c(0.75, 0.3))+
+          ggtitle(expr(paste(Delta, !!stat_lab, " (compared to null model)")))+
+          ylab("Window open")+
+          xlab("Window close")
+        if(plotall == TRUE){
+          plotallenv$delta <- ARR
+        } else {
+          ARR
+        }
+      } else if(arrow == TRUE){
+        
+        CIRC <- circle(centre = c(dataset$WindowClose[1], dataset$WindowOpen[1]), diameter = 5, npoints = 100)
+        colnames(CIRC) <- c("WindowClose", "WindowOpen")
+        CIRC <- CIRC %>% mutate( !!fitStat := 0)
+        
+        ARR <-   ggplot(dataset, aes(x = WindowClose, y = WindowOpen, z = !!fitStat))+
+          geom_tile(aes(fill = !!fitStat))+
+          scale_fill_gradientn(colours = c("red", "yellow", "blue"), name = "")+
+          theme_climwin()+
+          theme(legend.position = c(0.75, 0.3))+
+          ggtitle(expression(paste(Delta, "AICc (compared to null model)")))+
+          ylab("Window open") +
+          xlab("Window close") +
+          geom_path(data = CIRC, aes(x = WindowClose, y = WindowOpen), size = 1.2, colour = "black")+
+          geom_segment(aes(x = WindowClose[1], y = 0, xend = WindowClose[1], yend = (WindowOpen[1] - 2.5)), 
+                       size = 1, linetype = "dashed") +
+          geom_segment(aes(x = 0, y = WindowOpen[1], xend = (WindowClose[1] - 2.5), yend = WindowOpen[1]),
+                       size = 1, linetype = "dashed")
+        
+        if(plotall == TRUE){
+          plotallenv$delta <- ARR
+        } else {
+          ARR
+        }
+      }
+      
+    })
   }
-
-    }
-  )
-}
 }

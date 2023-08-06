@@ -23,7 +23,8 @@ Imports:
     reshape,
     numDeriv,
     RcppRoll,
-    nlme
+    nlme, 
+    stringr
 Suggests:
     testthat,
     knitr,

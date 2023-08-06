@@ -2,13 +2,23 @@
 % Please edit documentation in R/plotdelta.R
 \name{plotdelta}
 \alias{plotdelta}
-\title{Plot deltaAICc of models}
+\title{Plot deltaAICc or other measure of model fit}
 \usage{
-plotdelta(dataset, arrow = FALSE, plotall = FALSE, plotallenv, ThreeD = FALSE)
+plotdelta(
+  dataset,
+  fitStat = "deltaAICc",
+  arrow = FALSE,
+  plotall = FALSE,
+  plotallenv,
+  ThreeD = FALSE
+)
 }
 \arguments{
 \item{dataset}{A dataframe containing information on all fitted climate 
 windows. Output from \code{\link{slidingwin}}.}
+
+\item{fitStat}{A character string giving name of measure model fit to plot 
+from dataset of fitted climate windows.}
 
 \item{arrow}{TRUE or FALSE. Add arrows to plots to pinpoint best window.}
 
